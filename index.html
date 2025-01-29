@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Study Assistant</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+        }
+
+        [data-theme="dark"] {
+            --primary: #6366f1;
+            --background: #1e1e1e;
+            --surface: #2d2d2d;
+            --text: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui;
+            margin: 0;
+            padding: 20px;
+            background: var(--background);
+            color: var(--text);
+            transition: all 0.3s;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 16px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        input, select, button {
+            padding: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
+            font-size: 16px;
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .pr-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            margin: 12px 0;
+            background: var(--surface);
+            border-radius: 12px;
+            border-left: 4px solid;
+        }
+
+        .priority-low { border-color: #4ade80; }
+        .priority-medium { border-color: #fbbf24; }
+        .priority-high { border-color: #ef4444; }
+
+        .progress-bar {
+            height: 20px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.5s;
+        }
+
+        .progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            mix-blend-mode: difference;
+        }
+
+        .theme-switcher {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .pomodoro {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: var(--surface);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Smart Study Assistant 🚀</h1>
+            
+            <div class="pomodoro">
+                <div class="timer">25:00</div>
+                <button onclick="startPomodoro()">Mulai Fokus</button>
+                <button onclick="stopTimer()">Berhenti</button>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="prInput" placeholder="Judul PR">
+                <input type="time" id="timeInput">
+                <select id="priorityInput">
+                    <option value="low">Prioritas Rendah</option>
+                    <option value="medium">Prioritas Sedang</option>
+                    <option value="high">Prioritas Tinggi</option>
+                </select>
+                <select id="categoryInput">
+                    <option value="umum">Umum</option>
+                    <option value="matematika">Matematika</option>
+                    <option value="bahasa">Bahasa</option>
+                    <option value="sains">Sains</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <button onclick="addPR()" style="grid-column: span 2">Tambahkan PR</button>
+                <button onclick="exportToCalendar()" style="background: #3b82f6">Ekspor ke Kalender</button>
+                <button onclick="openDeepSeek()" style="background: #10b981">Buka DeepSeek</button>
+            </div>
+
+            <input type="text" id="searchInput" placeholder="Cari PR..." style="width: 100%; margin-top: 16px">
+            
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+                <div class="progress-text">0% Complete</div>
+            </div>
+        </div>
+
+        <div id="prList" class="card"></div>
+        <div id="recommendation" class="card"></div>
+    </div>
+
+    <div class="theme-switcher" onclick="toggleTheme()">🌓</div>
+
+    <script>
+        // Inisialisasi
+        let prs = JSON.parse(localStorage.getItem('prs') || '[]');
+        let timer = null;
+        let achievements = JSON.parse(localStorage.getItem('achievements') || '{}');
+        
+        // Tema awal
+        if (localStorage.getItem('theme') === 'dark') document.body.setAttribute('data-theme', 'dark');
+        
+        // Render awal
+        renderPRs();
+        updateProgress();
+        checkAchievements();
+        analyzeStudyPatterns();
+
+        // Fungsi utama
+        function addPR() {
+            const input = document.getElementById('prInput');
+            const time = document.getElementById('timeInput');
+            const priority = document.getElementById('priorityInput');
+            const category = document.getElementById('categoryInput');
+            
+            if (!input.value || !time.value) return;
+
+            const newPR = {
+                id: Date.now(),
+                task: input.value,
+                time: time.value,
+                priority: priority.value,
+                category: category.value,
+                completed: false,
+                createdAt: new Date().toISOString()
+            };
+
+            prs.push(newPR);
+            saveData();
+            renderPRs();
+            scheduleNotification(newPR);
+            checkAchievements();
+            analyzeStudyPatterns();
+            
+            input.value = '';
+            time.value = '';
+        }
+
+        function deletePR(id) {
+            prs = prs.filter(pr => pr.id !== id);
+            saveData();
+            renderPRs();
+            updateProgress();
+        }
+
+        function toggleComplete(id) {
+            prs = prs.map(pr => 
+                pr.id === id ? {...pr, completed: !pr.completed} : pr
+            );
+            saveData();
+            updateProgress();
+            checkAchievements();
+        }
+
+        function renderPRs(filteredPrs = prs) {
+            const list = document.getElementById('prList');
+            list.innerHTML = filteredPrs.length ? 
+                filteredPrs.map(pr => `
+                    <div class="pr-item priority-${pr.priority}">
+                        <div style="flex-grow: 1">
+                            <h3 style="margin: 0">${pr.task}</h3>
+                            <div>⏰ ${formatTime(pr.time)} | 📚 ${pr.category}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px">
+                            <button onclick="toggleComplete(${pr.id})">${pr.completed ? '✅' : '⬜'}</button>
+                            <button onclick="deletePR(${pr.id})">🗑️</button>
+                        </div>
+                    </div>
+                `).join('') : 
+                '<div class="card">🎉 Tidak ada PR! Gunakan waktu luangmu dengan bijak.</div>';
+        }
+
+        // Fitur Notifikasi
+        function scheduleNotification(pr) {
+            if (Notification.permission === 'granted') {
+                const [hours, minutes] = pr.time.split(':');
+                const notifyTime = new Date();
+                notifyTime.setHours(hours);
+                notifyTime.setMinutes(minutes);
+                
+                if (notifyTime < new Date()) notifyTime.setDate(notifyTime.getDate() + 1);
+                
+                const timeout = notifyTime - new Date();
+                
+                setTimeout(() => {
+                    new Notification(`⏰ Waktunya ${pr.task}`, {
+                        body: `Kategori: ${pr.category}\nPrioritas: ${pr.priority}`
+                    });
+                }, timeout);
+            }
+        }
+
+        // Sistem Reward
+        function checkAchievements() {
+            const newAchievements = {...achievements};
+            
+            if (prs.length >= 1 && !newAchievements.firstPR) {
+                newAchievements.firstPR = true;
+                showAchievement('🎉 Pencapaian Terbuka!', 'PR Pertama');
+            }
+            
+            if (prs.filter(pr => pr.completed).length >= 5 && !newAchievements.fiveCompleted) {
+                newAchievements.fiveCompleted = true;
+                showAchievement('🏆 Luar Biasa!', 'Menyelesaikan 5 PR');
+            }
+            
+            achievements = newAchievements;
+            localStorage.setItem('achievements', JSON.stringify(achievements));
+        }
+
+        function showAchievement(title, desc) {
+            const notification = new Notification(title, { body: desc });
+        }
+
+        // Pomodoro Timer
+        function startPomodoro(minutes = 25) {
+            stopTimer();
+            let seconds = minutes * 60;
+            const timerElement = document.querySelector('.timer');
+            
+            timer = setInterval(() => {
+                seconds--;
+                timerElement.textContent = 
+                    `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+                
+                if (seconds <= 0) {
+                    clearInterval(timer);
+                    new Notification('⏰ Waktu Fokus Selesai!', {
+                        body: 'Ambil istirahat 5 menit'
+                    });
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timer);
+            document.querySelector('.timer').textContent = '25:00';
+        }
+
+        // Lainnya
+        function updateProgress() {
+            const completed = prs.filter(pr => pr.completed).length;
+            const percentage = (completed / prs.length) * 100 || 0;
+            
+            document.querySelector('.progress-fill').style.width = `${percentage}%`;
+            document.querySelector('.progress-text').textContent = 
+                `${Math.round(percentage)}% Selesai (${completed}/${prs.length})`;
+        }
+
+        function exportToCalendar() {
+            const events = prs.map(pr => `
+                BEGIN:VEVENT
+                SUMMARY:${pr.task}
+                DESCRIPTION:Kategori: ${pr.category}\\nPrioritas: ${pr.priority}
+                DTSTART:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}
+                DTEND:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}
+                END:VEVENT
+            `).join('');
+            
+            const ics = `BEGIN:VCALENDAR\nVERSION:2.0\n${events}\nEND:VCALENDAR`;
+            const blob = new Blob([ics], { type: 'text/calendar' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'jadwal-pr.ics';
+            a.click();
+        }
+
+        function openDeepSeek() {
+            window.location.href = 'deepseek://app';
+            setTimeout(() => {
+                window.location.href = 'https://deepseek.com';
+            }, 300);
+        }
+
+        function toggleTheme() {
+            document.body.toggleAttribute('data-theme');
+            localStorage.setItem('theme', document.body.hasAttribute('data-theme') ? 'dark' : 'light');
+        }
+
+        // Pencarian
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            const filtered = prs.filter(pr => 
+                pr.task.toLowerCase().includes(query) ||
+                pr.category.toLowerCase().includes(query)
+            );
+            renderPRs(filtered);
+        });
+
+        // Analisis Belajar
+        function analyzeStudyPatterns() {
+            const categories = prs.reduce((acc, pr) => {
+                acc[pr.category] = (acc[pr.category] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const mostCommonCategory = Object.entries(categories).sort((a,b) => b[1]-a[1])[0]?.[0] || '-';
+            
+            document.getElementById('recommendation').innerHTML = `
+                <h2>📊 Analisis Belajar</h2>
+                <p>Kategori Paling Banyak: ${mostCommonCategory}</p>
+                <p>Total PR: ${prs.length}</p>
+                <p>PR Selesai: ${prs.filter(pr => pr.completed).length}</p>
+            `;
+        }
+
+        // Helper Functions
+        function formatTime(timeString) {
+            const [hours, minutes] = timeString.split(':');
+            return `${hours}:${minutes}`;
+        }
+
+        function saveData() {
+            localStorage.setItem('prs', JSON.stringify(prs));
+            updateProgress();
+        }
+
+        // Inisialisasi Notifikasi
+        if (Notification.permission !== 'denied') {
+            Notification.requestPermission();
+        }
+    </script>
+</body>
+</html>
